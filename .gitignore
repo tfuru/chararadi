@@ -66,3 +66,4 @@ node_modules/
 
 .DS_Store
 vue-app/node_modules/
+vue-app/dist/
