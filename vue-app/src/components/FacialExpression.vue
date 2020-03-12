@@ -1,8 +1,6 @@
 <template>
   <div class="facial-expression">
-    <button v-on:click='clickCameraOn'>カメラ</button>
     <div id="facial-container">
-      <video id="facial-camera" playsinline autoplay></video>
       <canvas id="facial-overlay" ></canvas>
     </div>
   </div>
@@ -12,41 +10,37 @@
 #facial-container {  
   position: relative;
 
-  #facial-camera, #facial-overlay {
+  #facial-overlay {
     position: absolute;
     top: 0;
     left: 0;
     margin: 0;
     padding: 0;
     transform: scaleX(-1);
-
-    display: none;
   }
 }
 </style>
 
 <script lang="ts">
 import { Component, Prop, Vue } from 'vue-property-decorator';
-import * as faceapi from 'face-api.js';
+declare var clm: any;
 
 import { FacialExpressionInterface } from '../store/modules/FacialExpression';
 
 @Component
 export default class FacialExpression  extends Vue {
   @Prop() private size: any;
+  @Prop() private display: any;
 
-  private camera!: HTMLVideoElement;
+  private clmtrackr: any;
+  private video!: HTMLVideoElement;
   private overlay!: HTMLCanvasElement;
-  private stream: MediaStream | null = null;
+  private overlayCC!: CanvasRenderingContext2D;
 
-  // モデル
-  private MODEL_URI = '/face/weights';
-
+  private facialExpression:FacialExpressionInterface = this.$store.getters.facialExpression;
+  
   private created() {
     console.log('created', this.size);
-    // console.log('faceapi', faceapi.nets)
-    console.log('store',this.$store);
-    console.log('facialExpression', this.$store.getters.facialExpression);
   }
 
   private mounted() {
@@ -55,13 +49,9 @@ export default class FacialExpression  extends Vue {
       console.error('containerEle not an HTMLElement', containerEle)
       return
     }
-
-    const cameraEle = document.getElementById('facial-camera');
-    if (!(cameraEle instanceof HTMLVideoElement)) {
-      console.error('cameraEle not an HTMLVideoElement')
-      return
+    if (this.display == false){
+      containerEle.style.display = 'none'; 
     }
-    this.camera = cameraEle;
 
     const overlayEle = document.getElementById('facial-overlay');
     if (!(overlayEle instanceof HTMLCanvasElement)) {
@@ -69,132 +59,57 @@ export default class FacialExpression  extends Vue {
       return
     }
     this.overlay = overlayEle;
+    this.overlayCC = this.overlay.getContext('2d')!;
 
     containerEle.style.width = `${this.size.width}px`;
     containerEle.style.height = `${this.size.height}px`;
 
-    this.camera.width = this.size.width;
-    this.camera.height = this.size.height;
-
     this.overlay.width = this.size.width;
     this.overlay.height = this.size.height;
     
-    // モデルをロードする
-    Promise.all([
-      // 顔認識
-      faceapi.nets.tinyFaceDetector.loadFromUri(this.MODEL_URI),
-      // 顔パーツの位置
-      faceapi.nets.faceLandmark68Net.loadFromUri(this.MODEL_URI),
-      // 表情スコア
-      faceapi.nets.faceExpressionNet.loadFromUri(this.MODEL_URI),
-    ])
-    .then(() => {
-      console.log('load MODEL_URI');
-    });
-  }
-
-  // カメラを有効にする
-  private clickCameraOn() {
-    console.log('clickCameraOn',this.camera.srcObject);
-    if (this.stream) {
-      console.log('stop');
-      this.stream.getVideoTracks()[0].stop();
-    }else{
-      navigator.mediaDevices.getUserMedia(
-          { audio: false,
-            video: true,
-            /* video: { width: this.size.width, height: this.size.height }, */
-          })
-          .then((stream) => {
-          // console.log('stream',stream);
-          if (this.camera !== null) {
-            this.stream = stream;
-            this.camera.srcObject = stream;
-
-            this.drawLoop();
-          }
-        });
-    }
+    console.log('clm', clm);
+    this.clmtrackr = new clm.tracker();
+    this.clmtrackr.init();
   }
 
   // 目,口の開閉 0.0 - 1.0
-  private landmarkOpenLv(p:faceapi.Point[], i1: number, i2: number, base: number): number {
-    const p1 = p[i1].y;
-    const p2 = p[i2].y;
+  private landmarkOpenLv(p:[], i1: number, i2: number, base: number): number {
+    const p1 = p[i1][1];
+    const p2 = p[i2][1];
+    // console.log('p1', p1);
+    // console.log('p2', p2);
     // console.log('v', Math.abs(p1 - p2));
     const v = ( Math.abs(p1 - p2) / base);
     return (v > 1.0) ? 1.0 : v;
   }
 
-  private async drawLoop() {
-    requestAnimationFrame(this.drawLoop);
-    if (this.overlay !== null && this.camera !== null) {
-      // console.log('overlayCC');
-      // オーバーレイ 表示
+  public onCameraStart(v: HTMLVideoElement) {
+    this.video = v;
+    this.clmtrackr.start( v );
+  }
 
-      // 1人 顔データ取得 顔パーツ,表情
-      const detections = await faceapi.detectSingleFace(
-                              this.camera,
-                              new faceapi.TinyFaceDetectorOptions()
-                          ).withFaceLandmarks()
-                          .withFaceExpressions();
-      if(typeof detections === 'undefined'){
-        return;
-      }
+  public drawLoop() {
+    if (this.video === null) {
+      return;
+    }
 
-      // console.log('detections', detections);
-      // const expressions = detections.expressions;
-      // console.log('expressions', expressions);
-      /*
-      angry: 0.002782773692160845
-      disgusted: 0.000007903956429800019
-      fearful: 4.904609909317514e-7
-      happy: 0.00007700323476456106
-      neutral: 0.9826717376708984
-      sad: 0.014413285069167614
-      surprised: 0.00004698477277997881
-      */
+    // 顔データ取得 顔パーツ,表情
+    const position = this.clmtrackr.getCurrentPosition();
+    // console.log('position', position);
+    if (!position) {
+      return;
+    }
 
-      const landmarks: faceapi.FaceLandmarks68 = detections.landmarks;
-      // console.log('landmarks', landmarks);
-      // Points 0 - 67
-      // leftEye 37 - 42   38,41 ,5 
-      // rightEye 43 - 48  44,48 ,5
-      // mouth   49 - 67  63,67, 18
-
-      const src:FacialExpressionInterface = this.$store.getters.facialExpression;
-      src.eyelid.blink_l = this.landmarkOpenLv(landmarks.getLeftEye(), 1, 4, 10.0);
-      src.eyelid.blink_r = this.landmarkOpenLv(landmarks.getRightEye(), 2, 5, 10.0);
-      src.mouth.a = this.landmarkOpenLv(landmarks.getMouth(), 15, 19, 25.0);
-      // console.log('leftEye', src.eyelid.blink_l);
-      // console.log('rightEye', src.eyelid.blink_r);
-      // console.log('mouth', src.mouth.a);
-      this.$store.dispatch('doUpdateFacialExpression', src);
-
-      /*
-      const jawOutline = landmarks.getJawOutline()
-      const nose = landmarks.getNose()
-      const mouth = landmarks.getMouth(); // 15,19
-      const leftEye = landmarks.getLeftEye() // 2,4
-      const rightEye = landmarks.getRightEye() // 1,5
-      const leftEyeBbrow = landmarks.getLeftEyeBrow()
-      const rightEyeBrow = landmarks.getRightEyeBrow()
-      */
-
-      // console.log('camera', this.camera.width, this.camera.height);
-      // console.log('overlay', this.overlay);
-      // リサイズ
-      const resizedDetections = faceapi.resizeResults(detections, {
-                        width: this.size.width,
-                        height: this.size.height });
-      
-      this.overlay.getContext('2d')!.clearRect(0, 0, this.size.width, this.size.height);
-      // 顔の位置
-      faceapi.draw.drawDetections(this.overlay, resizedDetections);
-      // 顔のパーツ
-      faceapi.draw.drawFaceLandmarks(this.overlay, resizedDetections);
-      // 表情    
-      faceapi.draw.drawFaceExpressions(this.overlay, resizedDetections); 
+    // ここで 口開閉, 瞬きを判定する
+    this.facialExpression.eyelid.blink_l  = this.landmarkOpenLv(position, 24, 26, 12.0); // 24,27,26
+    this.facialExpression.eyelid.blink_r = this.landmarkOpenLv(position, 29, 31, 12.0);// 29,32,31
+    this.facialExpression.mouth.a = this.landmarkOpenLv(position, 60, 57, 37.0);  // 60 - 57
+    this.$store.dispatch('doUpdateFacialExpression', this.facialExpression); 
+    
+    // 描画設定が有効な場合
+    if (this.display == true){
+      this.overlayCC.clearRect(0, 0, this.overlay.width, this.overlay.height);
+      this.clmtrackr.draw(this.overlay);
     }
   }
 }

@@ -48,7 +48,7 @@ export default class Stage extends Vue {
     this.light.position.set(1,1,1).normalize();
     this.scene.add(this.light);
     
-    const posX = 0.45;
+    const posX = 0.0;
     const promise1 = new Promise((resolve, reject) => {
       this.loaderLoad('/models/cecil-pink.vrm', posX*-1, 0, 0)
         .then((result: any) => {
@@ -59,6 +59,7 @@ export default class Stage extends Vue {
           resolve(true);
         });
     });
+    /*
     const promise2 = new Promise((resolve, reject) => {
       this.loaderLoad('/models/cecil-blue.vrm', posX, 0, 0)
         .then((result: any) => {
@@ -70,11 +71,11 @@ export default class Stage extends Vue {
         });
     });
     Promise.all([promise1, promise2]).then((values: any) => {
+    */
+    Promise.all([promise1]).then((values: any) => {
       console.log('values', values);
       console.log('vrm1', this.vrm1, this.mixer1);
-      console.log('vrm2', this.vrm2, this.mixer2);
-      // アニメーション実行
-      this.animate();
+      // console.log('vrm2', this.vrm2, this.mixer2);
     });
 
     const stage: any = document.getElementById('stage');
@@ -133,8 +134,9 @@ export default class Stage extends Vue {
   }
 
   // アニメーション
-  private animate() {
-    requestAnimationFrame(this.animate);    
+  public drawLoop() {
+    // requestAnimationFrame(this.drawLoop);
+    if (this.clock == null) return;  
     const deltaTime = this.clock.getDelta();
     if (this.vrm1 !== null && this.mixer1 !== null){
       // this.vrm1.scene.rotation.y = Math.PI * Math.sin( this.clock.getElapsedTime() );
@@ -145,12 +147,13 @@ export default class Stage extends Vue {
       if (this.vrm1.blendShapeProxy){
         const blink_l =  (0.9 < values.eyelid.blink_l)? 0.0 : values.eyelid.blink_l;
         const blink_r =  (0.9 < values.eyelid.blink_r)? 0.0 : values.eyelid.blink_r;
-        // 表情の反映
+        // 表情の反映        
         this.vrm1.blendShapeProxy.setValue( VRMSchema.BlendShapePresetName.A, values.mouth.a );
         this.vrm1.blendShapeProxy.setValue( VRMSchema.BlendShapePresetName.BlinkL, blink_l );
         this.vrm1.blendShapeProxy.setValue( VRMSchema.BlendShapePresetName.BlinkR, blink_r );
       }
     }
+    /*
     if (this.vrm2 !== null && this.mixer2 !== null){
       this.vrm2.update( deltaTime );
       this.mixer2.update( deltaTime );
@@ -165,6 +168,7 @@ export default class Stage extends Vue {
         this.vrm2.blendShapeProxy.setValue( VRMSchema.BlendShapePresetName.BlinkR, blink_r );
       }
     }
+    */
     this.renderer.render(this.scene, this.camera!);
   }
 }

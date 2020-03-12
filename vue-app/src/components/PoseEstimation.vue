@@ -4,8 +4,8 @@
     <div id="pose-container">
       <video id="pose-camera" playsinline autoplay></video>
       <canvas id="pose-overlay" ></canvas>
+      <img id="pose-dummy" src='/img/pose-dummy/1.png'>
     </div>
-    <img id="pose-dummy" src='/img/pose-dummy/1.png'>
   </div>
 </template>
 
@@ -19,7 +19,7 @@
 <script lang="ts">
 import { Component, Prop, Vue } from 'vue-property-decorator'
 
-import * as Posenet from '@tensorflow-models/posenet'
+import * as posenet from '@tensorflow-models/posenet';
 
 @Component
 export default class PoseEstimation extends Vue {
@@ -28,13 +28,13 @@ export default class PoseEstimation extends Vue {
   private camera!: HTMLVideoElement;
   private overlay!: HTMLCanvasElement;
   private stream: MediaStream | null = null;
-  private posenet!: Posenet.PoseNet;
 
   private created() {
     console.log('created', this.size);
   }
 
-  private async mounted() {    
+  private async mounted() {
+    /*  
     const containerEle = document.getElementById('pose-container');
     if (!(containerEle instanceof HTMLElement)) {
       console.error('containerEle not an HTMLElement', containerEle)
@@ -63,21 +63,30 @@ export default class PoseEstimation extends Vue {
 
     this.overlay.width = this.size.width;
     this.overlay.height = this.size.height;
+    */
+    
+    console.log('Posenet', posenet);
+    const net = await posenet.load({
+  architecture: 'MobileNetV1',
+  outputStride: 16,
+  multiplier: 0.75,
+  inputResolution: 257,
+});
+    console.log('net', net);
 
-    console.log('Posenet', Posenet);
-    Posenet.load().then((net) => {
+    posenet.load().then( function(net) {
       console.log('net', net);
-      this.posenet = net;
-
-      const dummyEle = document.getElementById('pose-dummy');
-      if (!(dummyEle instanceof HTMLImageElement)) {
-        return;
-      }
-
-      this.posenet.estimateSinglePose(dummyEle, {flipHorizontal: false})
-        .then((pose) => {
-          console.log('pose', pose);
-        });
+      /*
+      const dummyEle = new Image();
+      dummyEle.onload = () => {
+        console.log('dummyEle', dummyEle);
+        net.estimateSinglePose(dummyEle, {flipHorizontal: false})
+          .then((pose: any) => {
+            console.log('pose', pose);
+          });
+      };
+      dummyEle.src = '/img/pose-dummy/1.png';
+      */
     });
   }
 
